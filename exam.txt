@@ -1,0 +1,13 @@
+3/28mid term
+-2hr exam
+-cover ch1,6,2,3
+queries from hw#1
+-SQL
+study:slides(example)
+in general know:
+eng ->relation ->sql
+-translate sql to better sql query
+nested sub query to -->no nesting
+views 
+derived table -> with 
+-"having:<- without using having

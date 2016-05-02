@@ -1,0 +1,447 @@
+/* Name:Tianpei Luo CWID:10408917
+ * File - sdap.pgc (Need the .pgc extension!) 
+ *
+ * Desc - This is a simple skeleton program using Embedded SQL to read all
+ *        of the rows from the table "sales" and output to the console.
+ *        Simple but it contains all of the essential features of ESQL 
+ *        discussed in class!
+ *
+ * Steps to run this program : 
+ *  1. In the program (L49), modify [dbname], [username], [password] to
+ *     yours ([dbname] is the same as your [username] by default).
+ *  2. Preprocessor - $ ecpg -I "C:\Program Files\PostgreSQL\9.4\include" sdap.pgc
+ *  3. Compile      - $ gcc -c -I "C:\Program Files\PostgreSQL\9.4\include" sdap.c
+ *  4. Link         - $ gcc -L "C:\Program Files\PostgreSQL\9.4\lib" -lecpg -o sdap sdap.o
+ *  5. Execute      - $ .\sdap
+ */
+
+#include	<stdio.h>
+
+//----------------------------------------------------------------------
+// HOST VARIABLES definitions
+//----------------------------------------------------------------------
+EXEC SQL BEGIN DECLARE SECTION;
+struct {
+	char	*cust;
+	char	*prod;
+	short    dd;
+	short    mm;
+	short	 yy;
+	char	*state;
+	long	 quant;
+}	sale_rec;
+//----------------------------------------------------------------------
+//  VARIABLES definitions for query 1
+//----------------------------------------------------------------------
+
+struct node {
+       char  cust[20];
+       char  max_prod[20];
+       char  min_prod[20];
+       char  max_st[5];
+       char  min_st[5];
+       short  max_dd;
+       short  max_mm;
+       short  max_yy;
+       short  min_dd;
+       short  min_mm;
+       short  min_yy;
+       int   max_q;
+       int   min_q;
+       int   sum_q;
+       int   avg_q;
+       int   count_q;
+}output[500];
+
+//----------------------------------------------------------------------
+//  VARIABLES definitions for query 2
+//----------------------------------------------------------------------
+
+struct node_quary2  {
+       char  cust[20];
+       char  prod[20];
+       int   NY_max;
+       short  NY_dd;
+       short  NY_mm;
+       short  NY_yy;
+       int    NJ_min;
+       short  NJ_dd;
+       short  NJ_mm;
+       short  NJ_yy;
+       int   CT_min;
+       short  CT_dd;
+       short  CT_mm;
+       short  CT_yy;
+
+}output_1[500];
+EXEC SQL END DECLARE SECTION;
+EXEC SQL INCLUDE sqlca;
+
+//----------------------------------------------------------------------
+// FUNCTION PROTOTYPE declaration
+//----------------------------------------------------------------------
+//FUNTION FOR QUARY 1
+
+void    showresult(int index);            //output records to the console
+int     IsExist(char* Name,int index);    //Judge the name is exist or not
+int     Ismaxprod(int quant,int index);   //Judge if the number is the max
+int     Isminprod(int quant,int index);   //Judge if the number is the min
+int     Theposition(char* Name,int index);//where is the position in the ouput array
+void    Count_Avg(int index);             //Count the average quant 
+
+//FUNCTION FOR QUARY 2
+
+int    IsExist1(char* Name,char* prod,int index_1);          //Judge the name is exist or not
+void   showresult_1(int index_1);                            //output records to the console
+int    Theposition_1(char* Name,char* Prod,int index_1);     //where is the position in the ouput array
+int    maxProd_NY(int quant,int pos);                        //judge if the quant of the product is max quant in NY transaction
+int    minProd_NJ(int quant,int pos);                        //judge if the quant of the product is min quant in NJ transaction
+int    minProd_CT(int quant,int pos);                        //judge if the quant of the product is min quant in CT transaction
+//----------------------------------------------------------------------
+int main(int argc, char* argv[])
+//----------------------------------------------------------------------
+{
+   int index=0;
+   int index_1=0;
+   //----------------------------------------------------------------------
+   // DATABASE CONNECTION
+   //----------------------------------------------------------------------
+   // EXEC SQL CONNECT TO PostgreSQL@localhost:5432 USER PostgreSQL IDENTIFIED BY XYZ;
+   EXEC SQL CONNECT TO postgres@localhost:5432 USER postgres;
+   
+   if (sqlca.sqlcode != 0) {	// login error
+   	printf ("Login error!!!\n");
+   	return -1;
+   }
+   EXEC SQL WHENEVER sqlerror sqlprint;
+
+   //----------------------------------------------------------------------
+   // PRINT TITLE
+   //----------------------------------------------------------------------   
+   printf(" CUSTOMER  | MAX_Q   | MAX_PROD |   MAX_DATE   | ST | MIN_Q  | MIN_PROD |   MIN_DATE  | ST | AVG_Q |\n");
+   printf("-----------+---------+----------+--------------+----+--------+----------+-------------+----+-------+\n");
+   
+   //----------------------------------------------------------------------
+   // READ RECORDS
+   //----------------------------------------------------------------------
+   EXEC SQL DECLARE mycursor CURSOR FOR SELECT * FROM sales;
+   EXEC SQL SET TRANSACTION read only;
+   // Open cursor
+   EXEC SQL OPEN mycursor;
+   // Fetch Data
+   EXEC SQL FETCH FROM mycursor INTO :sale_rec; //fetch the first row
+  
+   while (sqlca.sqlcode == 0) {
+
+     //Programming for query1
+     //if the name is not exist in the output array then store it 
+      if(IsExist(sale_rec.cust,index)==-1)
+      {
+        strcpy(output[index].cust,sale_rec.cust);
+        strcpy(output[index].max_prod,sale_rec.prod);
+        strcpy(output[index].min_prod,sale_rec.prod);
+        strcpy(output[index].max_st,sale_rec.state);
+        strcpy(output[index].min_st,sale_rec.state);
+        output[index].max_q=sale_rec.quant;
+        output[index].min_q=sale_rec.quant;
+        output[index].max_dd=sale_rec.dd;
+        output[index].max_mm=sale_rec.mm;
+        output[index].max_yy=sale_rec.yy;
+        output[index].min_dd=sale_rec.dd;
+        output[index].min_mm=sale_rec.mm;
+        output[index].min_yy=sale_rec.yy;
+        output[index].count_q=1;
+        output[index].sum_q=sale_rec.quant;
+        ++index;
+      }else{
+         // judge if the transaction of the product's quant is the maximum quant
+         int pos=Theposition(sale_rec.cust,index);
+         if(Ismaxprod(sale_rec.quant,pos)==1)
+         {
+            output[pos].max_q=sale_rec.quant;
+            strcpy(output[pos].max_prod,sale_rec.prod); 
+            output[pos].max_dd=sale_rec.dd;
+            output[pos].max_mm=sale_rec.mm;
+            output[pos].max_yy=sale_rec.yy;
+            strcpy(output[pos].max_st,sale_rec.state);
+         }
+         // judge if the transaction of the product's quant is the minimum quant
+         if(Isminprod(sale_rec.quant,pos)==1)
+         {
+            output[pos].min_q=sale_rec.quant;
+            strcpy(output[pos].min_prod,sale_rec.prod);
+            output[pos].min_dd=sale_rec.dd;
+            output[pos].min_mm=sale_rec.mm;
+            output[pos].min_yy=sale_rec.yy; 
+            strcpy(output[pos].min_st,sale_rec.state);
+         }
+         output[pos].count_q++;
+         output[pos].sum_q+=sale_rec.quant;
+      }
+
+
+
+    // Programming for query2
+    // if the transaction not exist in the output array then store it
+    if(IsExist1(sale_rec.cust,sale_rec.prod,index_1)==-1)
+     {
+        strcpy(output_1[index_1].cust,sale_rec.cust);
+        strcpy(output_1[index_1].prod,sale_rec.prod);
+     //store the transaction that state = "NY" and year > 2000  
+        if(strcmp(sale_rec.state,"NY")==0&&sale_rec.yy>2000)
+        {
+         output_1[index_1].NY_max=sale_rec.quant;
+         output_1[index_1].NY_dd=sale_rec.dd;
+         output_1[index_1].NY_mm=sale_rec.mm;
+         output_1[index_1].NY_yy=sale_rec.yy;
+        }
+     //store the transaction that state = "NJ" and year > 2000  
+        if(strcmp(sale_rec.state,"NJ")==0&&sale_rec.yy>2000)
+        {
+         output_1[index_1].NJ_min=sale_rec.quant;
+         output_1[index_1].NJ_dd=sale_rec.dd;
+         output_1[index_1].NJ_mm=sale_rec.mm;
+         output_1[index_1].NJ_yy=sale_rec.yy;
+        }
+      //store the transaction that state = "CT"
+        if(strcmp(sale_rec.state,"CT")==0)
+         {
+         output_1[index_1].CT_min=sale_rec.quant;
+         output_1[index_1].CT_dd=sale_rec.dd;
+         output_1[index_1].CT_mm=sale_rec.mm;
+         output_1[index_1].CT_yy=sale_rec.yy;
+         }
+           index_1++; 
+     }else{
+       //store the transaction that state = "NY" and year > 2000 and compare with the exist one
+          int pos=Theposition_1(sale_rec.cust,sale_rec.prod,index_1);
+         
+          if(strcmp(sale_rec.state,"NY")==0&&sale_rec.yy>2000)
+          {
+          if(maxProd_NY(sale_rec.quant,pos)==1)
+            {
+            output_1[pos].NY_max=sale_rec.quant;
+            output_1[pos].NY_dd=sale_rec.dd;
+            output_1[pos].NY_mm=sale_rec.mm;
+            output_1[pos].NY_yy=sale_rec.yy;
+            }
+          }
+        //store the transaction that state = "NY" and year > 2000 and compare with the exist one
+          if(strcmp(sale_rec.state,"NJ")==0&&sale_rec.yy>2000)
+           { 
+                if(minProd_NJ(sale_rec.quant,pos)==1)
+                 {
+                  output_1[pos].NJ_min=sale_rec.quant;
+                  output_1[pos].NJ_dd=sale_rec.dd;
+                  output_1[pos].NJ_mm=sale_rec.mm;
+                  output_1[pos].NJ_yy=sale_rec.yy;
+                 }
+            }
+         //store the transaction that state = "CT" and compare with the exist one
+           if(strcmp(sale_rec.state,"CT")==0)
+              { 
+                if(minProd_CT(sale_rec.quant,pos)==1)
+                 {
+                  output_1[pos].CT_min=sale_rec.quant;
+                  output_1[pos].CT_dd=sale_rec.dd;
+                  output_1[pos].CT_mm=sale_rec.mm;
+                  output_1[pos].CT_yy=sale_rec.yy;
+                 }
+             }
+        
+      }  
+      EXEC SQL FETCH FROM mycursor INTO :sale_rec; //fetch the rest rows
+   }
+   // Close cursor
+
+   EXEC SQL CLOSE mycursor;
+
+   Count_Avg(index);
+
+   showresult(index);
+
+   showresult_1(index_1);
+   
+   return 0;
+}
+
+//----------------------------------------------------------------------
+void	showresult(int index)
+//----------------------------------------------------------------------
+{     for(int i=0;i<index;i++)
+       {
+	printf(" %-8s  |",output[i].cust);       // Customer
+        printf(" %5d   |",output[i].max_q);      // max_Quantity
+        printf(" %-7s  |",output[i].max_prod);   // max_Product
+        printf("   %02d/",output[i].max_mm);     // max_Month
+	printf("%02d/",output[i].max_dd);        // max_day
+	printf("%4d |",output[i].max_yy);        // max_Year
+        printf(" %-2s |",output[i].max_st);      // max_state
+        printf(" %5d  |",output[i].min_q);       // min_Quantity
+        printf("  %-7s |",output[i].min_prod);   // min_Product
+        printf("  %02d/",output[i].min_mm);      // min_Month
+	printf("%02d/",output[i].min_dd);        // min_day
+	printf("%04d |",output[i].min_yy);       // min_Year
+        printf(" %-2s |",output[i].min_st);      // min_state 
+        printf(" %4d  |\n",output[i].avg_q);     // avg_Quantitiy
+       }
+	
+}
+
+
+int IsExist(char* Name,int index)
+{  
+   if(index==0)
+   {
+     return -1;
+   }
+   for(int i=0;i<index;i++)
+   {
+    int flag=strcmp(output[i].cust,Name);
+    if(flag==0)
+    {
+      return 1;
+    }
+   }
+   return -1;
+}
+int Ismaxprod(int quant,int pos)
+{
+   
+   if(output[pos].max_q<quant)
+   {
+    return 1; 
+   }
+
+  return -1;
+}
+int Isminprod(int quant,int pos)
+{
+
+   if(output[pos].min_q>quant)
+   {
+    return 1; 
+   }
+ 
+  return -1;
+}
+int Theposition(char* Name,int index)
+{
+    for(int i=0;i<index;i++)
+   {
+    int flag=strcmp(output[i].cust,Name);
+    if(flag==0)
+    {
+      return i;
+    }
+   }
+}
+
+void Count_Avg(int index)
+{
+   for(int i=0;i<index;i++)
+   {
+   output[i].avg_q= output[i].sum_q/output[i].count_q;
+   }
+}
+
+
+
+//FOR QUERY 2
+
+int IsExist1(char* Name,char* prod,int index_1)
+{
+  if(index_1==0)
+   {
+     return -1;
+   }
+   for(int i=0;i<index_1;i++)
+   {
+    int flag=strcmp(output_1[i].cust,Name);
+    int flag_1=strcmp(output_1[i].prod,prod);
+    if(flag==0&&flag_1==0)
+    {
+      return 1;
+    }
+   }
+   return -1;
+
+}
+void	showresult_1(int index_1)
+{  printf("\n\n");
+   printf(" CUSTOMER  |   PROD   |  NY_MAX |     DATE     |  NJ_MIN |     DATE    |  CT_MIN |     DATE     |\n");
+   printf("-----------+----------+---------+--------------+---------+-------------+---------+--------------+\n");
+   for(int i=0;i<index_1;i++)
+     {
+       printf(" %-8s  |",output_1[i].cust);       // Customer
+       printf(" %-7s  |",output_1[i].prod);       // Product
+       if(output_1[i].NY_max>0){
+       printf(" %7d |",output_1[i].NY_max);       // max_quant in NY
+       }else{printf("    NULL |");}
+       if(output_1[i].NY_yy>0){
+       printf("   %02d/",output_1[i].NY_mm);      // NY_Month
+       printf("%02d/",output_1[i].NY_dd);         // NY_Day
+       printf("%04d |",output_1[i].NY_yy);        // NY_Year
+        }else{ printf("         NULL |");}
+       if(output_1[i].NJ_min>0){
+       printf(" %7d |",output_1[i].NJ_min);       // min_quant in NJ
+       }else{printf("    NULL |");}
+       if(output_1[i].NJ_yy>0){
+       printf("  %02d/",output_1[i].NJ_mm);       // NJ_Month
+       printf("%02d/",output_1[i].NJ_dd);         // NJ_Day
+       printf("%04d |",output_1[i].NJ_yy);        // NJ_Year
+       }else{ printf("        NULL |");}
+       if(output_1[i].CT_min>0){
+       printf(" %7d |",output_1[i].CT_min);       // min_quant in CT
+        }else{ printf("    NULL |");}
+       if(output_1[i].CT_yy>0){
+       printf("   %02d/",output_1[i].CT_mm);      // CT_Month
+       printf("%02d/",output_1[i].CT_dd);         // CT_Day
+       printf("%04d |\n",output_1[i].CT_yy);      // CT_Year
+       }else{ printf("         NULL |\n");}
+     }
+}
+
+int Theposition_1(char* Name,char* Prod,int index_1)
+{
+    for(int i=0;i<index_1;i++)
+   {
+    int flag=strcmp(output_1[i].cust,Name);
+    int flag_1=strcmp(output_1[i].prod,Prod);
+    if(flag==0&flag_1==0)
+    {
+      return i;
+    }
+   }
+}
+
+int maxProd_NY(int quant,int pos)
+{
+   
+   if(output_1[pos].NY_max<=quant)
+   {
+    return 1; 
+   }
+
+  return -1;
+}
+int minProd_NJ(int quant,int pos)
+{
+   
+   if(output_1[pos].NJ_min>=quant||output_1[pos].NJ_min==0)
+   {
+    return 1; 
+   }
+
+  return -1;
+}
+int minProd_CT(int quant,int pos)
+{
+   
+   if(output_1[pos].CT_min>=quant||output_1[pos].CT_min==0)
+   {
+    return 1; 
+   }
+
+  return -1;
+}
